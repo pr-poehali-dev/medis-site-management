@@ -13,6 +13,7 @@ interface User {
   role: Role;
   position: string;
   login: string;
+  password?: string;
 }
 
 interface Treatment {
@@ -130,34 +131,75 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 
 // ─── Auth Screen ──────────────────────────────────────────────────────────────
 
-const registeredUsers: User[] = [...INITIAL_USERS];
+const registeredUsers: User[] = INITIAL_USERS.map(u => ({ ...u, password: "1234" }));
 
 function AuthScreen({ onLogin, onRegister }: { onLogin: (u: User) => void; onRegister: (u: User) => void }) {
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "recover">("login");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [position, setPosition] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  // recover state
+  const [recoverLogin, setRecoverLogin] = useState("");
+  const [recoverName, setRecoverName] = useState("");
+  const [recoverStep, setRecoverStep] = useState<1 | 2>(1);
+  const [newPassword, setNewPassword] = useState("");
+  const [newPassword2, setNewPassword2] = useState("");
+
+  const switchMode = (m: typeof mode) => { setMode(m); setError(""); setSuccess(""); setRecoverStep(1); setRecoverLogin(""); setRecoverName(""); setNewPassword(""); setNewPassword2(""); };
 
   const handleLogin = () => {
     const user = registeredUsers.find(u => u.login === login);
     if (!user) { setError("Пользователь не найден"); return; }
-    if (password !== "1234" && password !== login) { setError("Неверный пароль"); return; }
+    const pwd = user.password ?? "1234";
+    if (password !== pwd) { setError("Неверный пароль"); return; }
     onLogin(user);
   };
 
   const handleRegister = () => {
     if (!name.trim() || !login.trim() || !password.trim()) { setError("Заполните все поля"); return; }
     if (registeredUsers.find(u => u.login === login)) { setError("Логин уже занят"); return; }
-    const newUser: User = { id: genId(), name, role: "nurse", position: position || "Медсестра", login };
+    const newUser: User = { id: genId(), name, role: "nurse", position: position || "Медсестра", login, password };
     registeredUsers.push(newUser);
     setError("");
-    setMode("login");
+    switchMode("login");
     setLogin(newUser.login);
     setPassword(password);
     onRegister(newUser);
   };
+
+  const handleRecoverCheck = () => {
+    const user = registeredUsers.find(u => u.login === recoverLogin);
+    if (!user) { setError("Пользователь с таким логином не найден"); return; }
+    const normInput = recoverName.trim().toLowerCase();
+    const normStored = user.name.trim().toLowerCase();
+    if (!normStored.includes(normInput) || normInput.length < 3) {
+      setError("ФИО не совпадает с данными при регистрации"); return;
+    }
+    setError("");
+    setRecoverStep(2);
+  };
+
+  const handleRecoverSave = () => {
+    if (newPassword.length < 4) { setError("Пароль должен содержать не менее 4 символов"); return; }
+    if (newPassword !== newPassword2) { setError("Пароли не совпадают"); return; }
+    const idx = registeredUsers.findIndex(u => u.login === recoverLogin);
+    if (idx === -1) return;
+    registeredUsers[idx] = { ...registeredUsers[idx], password: newPassword };
+    setError("");
+    setSuccess("Пароль успешно изменён! Теперь вы можете войти.");
+    setRecoverStep(1);
+    setRecoverLogin("");
+    setRecoverName("");
+    setNewPassword("");
+    setNewPassword2("");
+    setTimeout(() => switchMode("login"), 1800);
+  };
+
+  const inputCls = "w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition";
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-background">
@@ -176,73 +218,148 @@ function AuthScreen({ onLogin, onRegister }: { onLogin: (u: User) => void; onReg
         </div>
 
         <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
-          <div className="flex border-b border-border">
-            <button onClick={() => { setMode("login"); setError(""); }}
-              className={`flex-1 py-4 text-sm font-semibold transition-colors ${mode === "login" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-muted-foreground hover:text-foreground"}`}>
-              Войти
-            </button>
-            <button onClick={() => { setMode("register"); setError(""); }}
-              className={`flex-1 py-4 text-sm font-semibold transition-colors ${mode === "register" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-muted-foreground hover:text-foreground"}`}>
-              Регистрация
-            </button>
-          </div>
+          {/* Tabs — скрываем при восстановлении */}
+          {mode !== "recover" ? (
+            <div className="flex border-b border-border">
+              <button onClick={() => switchMode("login")}
+                className={`flex-1 py-4 text-sm font-semibold transition-colors ${mode === "login" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-muted-foreground hover:text-foreground"}`}>
+                Войти
+              </button>
+              <button onClick={() => switchMode("register")}
+                className={`flex-1 py-4 text-sm font-semibold transition-colors ${mode === "register" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-muted-foreground hover:text-foreground"}`}>
+                Регистрация
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-border">
+              <button onClick={() => switchMode("login")} className="text-muted-foreground hover:text-foreground transition">
+                <Icon name="ArrowLeft" size={18} />
+              </button>
+              <span className="font-semibold text-foreground">Восстановление доступа</span>
+            </div>
+          )}
 
           <div className="p-6 space-y-4">
+            {/* ── Login ── */}
+            {mode === "login" && (
+              <>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Логин</label>
+                  <input value={login} onChange={e => setLogin(e.target.value)} placeholder="doctor / nurse" className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Пароль</label>
+                  <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="1234"
+                    onKeyDown={e => e.key === "Enter" && handleLogin()} className={inputCls} />
+                </div>
+                {error && <ErrorMsg text={error} />}
+                <button onClick={handleLogin}
+                  className="w-full py-3 rounded-xl gradient-primary text-white font-semibold text-sm transition-all hover:opacity-90 hover:shadow-lg active:scale-95">
+                  Войти в систему
+                </button>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    Тест: <span className="font-mono text-foreground">doctor</span> / <span className="font-mono text-foreground">nurse</span> · <span className="font-mono text-foreground">1234</span>
+                  </p>
+                  <button onClick={() => switchMode("recover")}
+                    className="text-xs text-primary hover:opacity-70 transition font-semibold">
+                    Забыли пароль?
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── Register ── */}
             {mode === "register" && (
               <>
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">ФИО</label>
-                  <input value={name} onChange={e => setName(e.target.value)}
-                    placeholder="Иванова Мария Сергеевна"
-                    className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition" />
+                  <input value={name} onChange={e => setName(e.target.value)} placeholder="Иванова Мария Сергеевна" className={inputCls} />
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Должность</label>
-                  <input value={position} onChange={e => setPosition(e.target.value)}
-                    placeholder="Медсестра / Медбрат"
-                    className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition" />
+                  <input value={position} onChange={e => setPosition(e.target.value)} placeholder="Медсестра / Медбрат" className={inputCls} />
                 </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Логин</label>
+                  <input value={login} onChange={e => setLogin(e.target.value)} placeholder="придумайте логин" className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Пароль</label>
+                  <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="придумайте пароль"
+                    onKeyDown={e => e.key === "Enter" && handleRegister()} className={inputCls} />
+                </div>
+                {error && <ErrorMsg text={error} />}
+                <button onClick={handleRegister}
+                  className="w-full py-3 rounded-xl gradient-primary text-white font-semibold text-sm transition-all hover:opacity-90 hover:shadow-lg active:scale-95">
+                  Зарегистрироваться
+                </button>
+                <p className="text-xs text-muted-foreground text-center">Регистрация доступна только для медсестёр и медбратьев</p>
               </>
             )}
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Логин</label>
-              <input value={login} onChange={e => setLogin(e.target.value)}
-                placeholder={mode === "login" ? "doctor / nurse" : "придумайте логин"}
-                className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Пароль</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                placeholder={mode === "login" ? "1234" : "придумайте пароль"}
-                onKeyDown={e => e.key === "Enter" && (mode === "login" ? handleLogin() : handleRegister())}
-                className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition" />
-            </div>
 
-            {error && (
-              <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 px-3 py-2 rounded-lg">
-                <Icon name="AlertCircle" size={16} />
-                {error}
-              </div>
-            )}
-
-            <button onClick={mode === "login" ? handleLogin : handleRegister}
-              className="w-full py-3 rounded-xl gradient-primary text-white font-semibold text-sm transition-all hover:opacity-90 hover:shadow-lg active:scale-95">
-              {mode === "login" ? "Войти в систему" : "Зарегистрироваться"}
-            </button>
-
-            {mode === "login" && (
-              <p className="text-center text-xs text-muted-foreground">
-                Тест: <span className="font-mono text-foreground">doctor</span> / <span className="font-mono text-foreground">nurse</span> · пароль <span className="font-mono text-foreground">1234</span>
-              </p>
-            )}
-            {mode === "register" && (
-              <p className="text-xs text-muted-foreground text-center">
-                Регистрация доступна только для медсестёр и медбратьев
-              </p>
+            {/* ── Recover ── */}
+            {mode === "recover" && (
+              <>
+                {success ? (
+                  <div className="flex items-center gap-2 text-accent text-sm bg-accent/10 px-3 py-3 rounded-lg animate-fade-in">
+                    <Icon name="CheckCircle" size={16} />
+                    {success}
+                  </div>
+                ) : recoverStep === 1 ? (
+                  <>
+                    <p className="text-sm text-muted-foreground">Введите ваш логин и ФИО, указанные при регистрации — мы позволим задать новый пароль.</p>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Логин</label>
+                      <input value={recoverLogin} onChange={e => setRecoverLogin(e.target.value)} placeholder="ваш логин" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">ФИО (полностью или частично)</label>
+                      <input value={recoverName} onChange={e => setRecoverName(e.target.value)} placeholder="Иванова Мария"
+                        onKeyDown={e => e.key === "Enter" && handleRecoverCheck()} className={inputCls} />
+                    </div>
+                    {error && <ErrorMsg text={error} />}
+                    <button onClick={handleRecoverCheck}
+                      className="w-full py-3 rounded-xl gradient-primary text-white font-semibold text-sm transition-all hover:opacity-90 hover:shadow-lg active:scale-95">
+                      Проверить данные
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 text-sm bg-accent/10 text-accent px-3 py-2 rounded-lg">
+                      <Icon name="CheckCircle" size={15} />
+                      Личность подтверждена. Задайте новый пароль.
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Новый пароль</label>
+                      <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="минимум 4 символа" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Повторите пароль</label>
+                      <input type="password" value={newPassword2} onChange={e => setNewPassword2(e.target.value)} placeholder="повторите пароль"
+                        onKeyDown={e => e.key === "Enter" && handleRecoverSave()} className={inputCls} />
+                    </div>
+                    {error && <ErrorMsg text={error} />}
+                    <button onClick={handleRecoverSave}
+                      className="w-full py-3 rounded-xl gradient-primary text-white font-semibold text-sm transition-all hover:opacity-90 hover:shadow-lg active:scale-95">
+                      Сохранить новый пароль
+                    </button>
+                  </>
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ErrorMsg({ text }: { text: string }) {
+  return (
+    <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 px-3 py-2 rounded-lg animate-fade-in">
+      <Icon name="AlertCircle" size={16} />
+      {text}
     </div>
   );
 }
