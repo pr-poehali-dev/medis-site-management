@@ -505,7 +505,7 @@ function PatientsSection({ user, patients, setPatients, theme, onTheme }:
     const np: Patient = {
       id: genId(), ...form,
       doctorId: user.id,
-      doctorName: `${user.name.split(" ")[0][0]}. ${user.name.split(" ")[1] || ""}`,
+      doctorName: (() => { const p = user.name.split(" "); return `${p[0]} ${p[1]?.[0] ?? ""}${p[1] ? "." : ""}${p[2]?.[0] ?? ""}${p[2] ? "." : ""}`; })(),
       admittedAt: todayStr(), archived: false, treatments: []
     };
     setPatients([...patients, np]);
