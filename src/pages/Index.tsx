@@ -139,6 +139,7 @@ function AuthScreen({ onLogin, onRegister }: { onLogin: (u: User) => void; onReg
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [position, setPosition] = useState("");
+  const [role, setRole] = useState<Role>("nurse");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -149,7 +150,7 @@ function AuthScreen({ onLogin, onRegister }: { onLogin: (u: User) => void; onReg
   const [newPassword, setNewPassword] = useState("");
   const [newPassword2, setNewPassword2] = useState("");
 
-  const switchMode = (m: typeof mode) => { setMode(m); setError(""); setSuccess(""); setRecoverStep(1); setRecoverLogin(""); setRecoverName(""); setNewPassword(""); setNewPassword2(""); };
+  const switchMode = (m: typeof mode) => { setMode(m); setError(""); setSuccess(""); setRecoverStep(1); setRecoverLogin(""); setRecoverName(""); setNewPassword(""); setNewPassword2(""); setName(""); setLogin(""); setPassword(""); setPosition(""); setRole("nurse"); };
 
   const handleLogin = () => {
     const user = registeredUsers.find(u => u.login === login);
@@ -162,7 +163,8 @@ function AuthScreen({ onLogin, onRegister }: { onLogin: (u: User) => void; onReg
   const handleRegister = () => {
     if (!name.trim() || !login.trim() || !password.trim()) { setError("Заполните все поля"); return; }
     if (registeredUsers.find(u => u.login === login)) { setError("Логин уже занят"); return; }
-    const newUser: User = { id: genId(), name, role: "nurse", position: position || "Медсестра", login, password };
+    const defaultPosition = role === "doctor" ? "Врач" : "Медсестра";
+    const newUser: User = { id: genId(), name, role, position: position || defaultPosition, login, password };
     registeredUsers.push(newUser);
     setError("");
     switchMode("login");
@@ -273,12 +275,26 @@ function AuthScreen({ onLogin, onRegister }: { onLogin: (u: User) => void; onReg
             {mode === "register" && (
               <>
                 <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Роль</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setRole("nurse")}
+                      className={`py-2.5 rounded-xl border text-sm font-semibold transition-all ${role === "nurse" ? "border-primary bg-primary/10 text-primary" : "border-input text-muted-foreground hover:border-primary/50"}`}>
+                      Медсестра / Медбрат
+                    </button>
+                    <button type="button" onClick={() => setRole("doctor")}
+                      className={`py-2.5 rounded-xl border text-sm font-semibold transition-all ${role === "doctor" ? "border-primary bg-primary/10 text-primary" : "border-input text-muted-foreground hover:border-primary/50"}`}>
+                      Врач
+                    </button>
+                  </div>
+                </div>
+                <div>
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">ФИО</label>
                   <input value={name} onChange={e => setName(e.target.value)} placeholder="Иванова Мария Сергеевна" className={inputCls} />
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Должность</label>
-                  <input value={position} onChange={e => setPosition(e.target.value)} placeholder="Медсестра / Медбрат" className={inputCls} />
+                  <input value={position} onChange={e => setPosition(e.target.value)}
+                    placeholder={role === "doctor" ? "Терапевт / Хирург / Кардиолог" : "Медсестра / Медбрат"} className={inputCls} />
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Логин</label>
@@ -294,7 +310,6 @@ function AuthScreen({ onLogin, onRegister }: { onLogin: (u: User) => void; onReg
                   className="w-full py-3 rounded-xl gradient-primary text-white font-semibold text-sm transition-all hover:opacity-90 hover:shadow-lg active:scale-95">
                   Зарегистрироваться
                 </button>
-                <p className="text-xs text-muted-foreground text-center">Регистрация доступна только для медсестёр и медбратьев</p>
               </>
             )}
 
